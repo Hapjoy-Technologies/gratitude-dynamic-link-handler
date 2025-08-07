@@ -31,7 +31,16 @@
     async function init() {
       const status = document.getElementById('status');
       const rawPath = window.location.pathname;
-      const code = rawPath.replace(/^\/+|\/+$/g, '');
+      // Adjust this to match your GitHub repo name
+      const BASE_PATH = '/gratitude-dynamic-link-handler/';
+
+      let code = rawPath;
+      if (rawPath.startsWith(BASE_PATH)) {
+        code = rawPath.slice(BASE_PATH.length);
+      }
+
+      // Remove any leading or trailing slashes
+      code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
         status.textContent = 'Invalid link.';
         return;
