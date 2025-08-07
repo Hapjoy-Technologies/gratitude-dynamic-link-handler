@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta property="og:title" content="Gratitude | A tool to help you improve your long-term well-being."/>
+  <meta property="og:image" content="https://gratitude-app-content.s3.us-east-1.amazonaws.com/gratitude/pastel-pink-logo-1024.png"/>
+  <meta property="og:description" content="Write journal entries for your gratitude journal, construct self-affirmations, receive daily quotes, and build a vision board that consists of images and goals."/>
+  <title>Opening Gratitude…</title>
+  <style>
+    body { font-family:sans-serif; text-align:center; padding:2rem; color:#333; background:#f9f9f9; }
+    .message { margin-top:2rem; font-size:1.1rem; }
+    a { color:#0070f3; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <h1>Opening Gratitude…</h1>
+  <div id="status" class="message">Initializing...</div>
+  <div id="manual" class="message" style="display:none;">
+    If nothing happens, <span id="manual-link-container"></span>.
+  </div>
+  <script>
+    // ─── CONFIG ─────────────────────────────────────────────────────────
+    const API_REDIRECT =
+      'https://avhedfdhma.execute-api.us-east-1.amazonaws.com/prod/redirectToLongURL';
+    const ANDROID_PACKAGE = "com.northstar.gratitude";
+    const IOS_APP_ID      = "1372575227";
+    const FALLBACK_WEB    = "https://www.gratefulness.me/";
+    // ─────────────────────────────────────────────────────────────────────
+
+    async function init() {
+      const status = document.getElementById('status');
+      const rawPath = window.location.pathname;
+      const code = rawPath.replace(/^\/+|\/+$/g, '');
+      if (!code) {
+        status.textContent = 'Invalid link.';
+        return;
+      }
+      status.textContent = 'Resolving link...';
+
+      try {
+        const resp = await fetch(API_REDIRECT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${resp.status}`);
+        }
+        // fetch follows redirects by default
+        const data = await resp.json();
+        const finalUrl = data.longUrl;
+        status.textContent = 'Opening app...';
+
+        const ua = navigator.userAgent;
+        const isAndroid = /Android/i.test(ua);
+        const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+        const start     = Date.now();
+        const DELAY     = 1500;
+
+        if (isAndroid) {
+          window.location =
+            `intent://${finalUrl.replace(/^https?:\/\//, '')}` +
+            `#Intent;scheme=https;package=${ANDROID_PACKAGE};end`;
+        } else if (isIOS) {
+          window.location = finalUrl;
+        } else {
+          window.location = finalUrl;
+          return;
+        }
+
+        setTimeout(() => {
+          if (document.visibilityState === 'visible' && Date.now() - start >= DELAY) {
+            if (isAndroid) {
+              window.location =
+                `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+            } else if (isIOS) {
+              window.location =
+                `https://apps.apple.com/app/id${IOS_APP_ID}`;
+            }
+          }
+        }, DELAY);
+
+      } catch (err) {
+        console.error('Redirect error:', err);
+        status.textContent = `Error: ${err.message}`;
+        showManual();
+      }
+    }
+
+    function showManual() {
+      const manual = document.getElementById('manual');
+      const container = document.getElementById('manual-link-container');
+      const ua = navigator.userAgent;
+      let href, text;
+      if (/Android/i.test(ua)) {
+        href = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+        text = 'Get it on Google Play';
+      } else if (/iPhone|iPad|iPod/i.test(ua)) {
+        href = FALLBACK_WEB;
+        text = 'Open in App';
+      } else {
+        href = FALLBACK_WEB;
+        text = 'Visit our website';
+      }
+      container.innerHTML = `<a href="${href}" target="_blank">${text}</a>`;
+      manual.style.display = 'block';
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
