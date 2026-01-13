@@ -26,20 +26,54 @@
     const ANDROID_PACKAGE = "com.northstar.gratitude";
     const IOS_APP_ID      = "1372575227";
     const FALLBACK_WEB    = "https://www.gratefulness.me/";
+    const BASE_PATH       = '/gratitude-dynamic-link-handler/';
     // ─────────────────────────────────────────────────────────────────────
+
+    function extractUtmParams(url) {
+      try {
+        const u = new URL(url);
+        const p = u.searchParams;
+
+        const utm_source   = p.get("utm_source");
+        const utm_medium   = p.get("utm_medium");
+        const utm_campaign = p.get("utm_campaign");
+
+        const out = {};
+        if (utm_source) out.utm_source = utm_source;
+        if (utm_medium) out.utm_medium = utm_medium;
+        if (utm_campaign) out.utm_campaign = utm_campaign;
+
+        return out;
+      } catch {
+        return {};
+      }
+    }
+
+    function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
+      const base = `https://play.google.com/store/apps/details?id=${packageName}`;
+
+      const pairs = [];
+      if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
+      if (utmParams.utm_medium) pairs.push(`utm_medium=${utmParams.utm_medium}`);
+      if (utmParams.utm_campaign) pairs.push(`utm_campaign=${utmParams.utm_campaign}`);
+
+      if (pairs.length === 0) return base;
+
+      const referrerPayload = pairs.join("&");
+      const encoded = encodeURIComponent(referrerPayload);
+
+      return `${base}&referrer=${encoded}`;
+    }
 
     async function init() {
       const status = document.getElementById('status');
       const rawPath = window.location.pathname;
-      
-      const BASE_PATH = '/gratitude-dynamic-link-handler/';
 
       let code = rawPath;
       if (rawPath.startsWith(BASE_PATH)) {
         code = rawPath.slice(BASE_PATH.length);
       }
 
-      // Remove any leading or trailing slashes
       code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
         status.textContent = 'Invalid link.';
@@ -47,19 +81,22 @@
       }
       status.textContent = 'Resolving link...';
 
+      let finalUrl = null;
+
       try {
         const resp = await fetch(API_REDIRECT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
         });
+
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           throw new Error(err.message || `HTTP ${resp.status}`);
         }
-        // fetch follows redirects by default
+
         const data = await resp.json();
-        const finalUrl = data.longUrl;
+        finalUrl = data.longUrl;
         status.textContent = 'Opening app...';
 
         const ua = navigator.userAgent;
@@ -82,11 +119,10 @@
         setTimeout(() => {
           if (document.visibilityState === 'visible' && Date.now() - start >= DELAY) {
             if (isAndroid) {
-              window.location =
-                `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+              const utmParams = extractUtmParams(finalUrl);
+              window.location = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
             } else if (isIOS) {
-              window.location =
-                `https://apps.apple.com/app/id${IOS_APP_ID}`;
+              window.location = `https://apps.apple.com/app/id${IOS_APP_ID}`;
             }
           }
         }, DELAY);
@@ -94,26 +130,29 @@
       } catch (err) {
         console.error('Redirect error:', err);
         status.textContent = `Error: ${err.message}`;
-        showManual();
+        showManual(finalUrl);
       }
     }
 
-    function showManual() {
+    function showManual(finalUrl) {
       const manual = document.getElementById('manual');
       const container = document.getElementById('manual-link-container');
       const ua = navigator.userAgent;
       let href, text;
+
       if (/Android/i.test(ua)) {
-        href = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+        const utmParams = extractUtmParams(finalUrl || "");
+        href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
         text = 'Get it on Google Play';
       } else if (/iPhone|iPad|iPod/i.test(ua)) {
         href = FALLBACK_WEB;
-        text = 'Open in App';
+        text = 'Visit our website';
       } else {
         href = FALLBACK_WEB;
         text = 'Visit our website';
       }
-      container.innerHTML = `<a href="${href}" target="_blank">${text}</a>`;
+
+      container.innerHTML = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
       manual.style.display = 'block';
     }
 
