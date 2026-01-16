@@ -187,25 +187,26 @@
     }
 
     function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
+      const base = `https://play.google.com/store/apps/details?id=${packageName}`;
+
       const pairs = [];
       if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
       if (utmParams.utm_medium) pairs.push(`utm_medium=${utmParams.utm_medium}`);
       if (utmParams.utm_campaign) pairs.push(`utm_campaign=${utmParams.utm_campaign}`);
 
-      // If no params, just return a standard market link (though explicit intent is still safer)
-      if (pairs.length === 0) {
-        return `intent://details?id=${packageName}#Intent;scheme=market;package=com.android.vending;end;`;
-      }
+      if (pairs.length === 0) return base;
 
-      // 1. Join the UTM params
       const referrerPayload = pairs.join("&");
+      const encoded = encodeURIComponent(referrerPayload);
 
-      // 2. Encode the payload so it stays inside the 'referrer' query param
-      const encodedReferrer = encodeURIComponent(referrerPayload);
+      return `${base}&referrer=${encoded}`;
+    }
 
-      // 3. Construct the Intent
-      // We use scheme=market, but we target package=com.android.vending directly.
-      return `intent://details?id=${packageName}&referrer=${encodedReferrer}#Intent;scheme=market;package=com.android.vending;end;`;
+    function buildAndroidIntentUrl(finalUrl, playFallbackUrl) {
+      // intent://<host+path+query>#Intent;scheme=https;package=<pkg>;S.browser_fallback_url=<encoded>;end
+      const stripped = (finalUrl || "").replace(/^https?:\/\//i, "");
+      const encodedFallback = encodeURIComponent(playFallbackUrl);
+      return `intent://${stripped}#Intent;scheme=https;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodedFallback};end`;
     }
 
     async function init() {
@@ -247,30 +248,29 @@
         const ua = navigator.userAgent;
         const isAndroid = /Android/i.test(ua);
         const isIOS = /iPhone|iPad|iPod/i.test(ua);
-        const start = Date.now();
-        const DELAY = 1500;
 
         if (isAndroid) {
-          window.location =
-            `intent://${finalUrl.replace(/^https?:\/\//, '')}` +
-            `#Intent;scheme=https;package=${ANDROID_PACKAGE};end`;
+          const utmParams = extractUtmParams(finalUrl);
+          const playUrl = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
+
+          // ✅ Use browser_fallback_url so Android handles the fallback in one flow
+          window.location = buildAndroidIntentUrl(finalUrl, playUrl);
+
+          // Optional: reveal a manual button quickly in case intent is blocked
+          setTimeout(() => showManual(finalUrl), 1200);
+
         } else if (isIOS) {
+          // iOS: try opening the universal link
           window.location = finalUrl;
+
+          // Optional: show manual fallback after a moment
+          setTimeout(() => showManual(finalUrl), 1200);
+
         } else {
+          // Desktop / other
           window.location = finalUrl;
           return;
         }
-
-        setTimeout(() => {
-          if (document.visibilityState === 'visible' && Date.now() - start >= DELAY) {
-            if (isAndroid) {
-              const utmParams = extractUtmParams(finalUrl);
-              window.location = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
-            } else if (isIOS) {
-              window.location = `https://apps.apple.com/app/id${IOS_APP_ID}`;
-            }
-          }
-        }, DELAY);
 
       } catch (err) {
         console.error('Redirect error:', err);
@@ -295,8 +295,8 @@
         href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
         text = 'Get it on Google Play';
       } else if (/iPhone|iPad|iPod/i.test(ua)) {
-        href = FALLBACK_WEB;
-        text = 'Visit our website'; // Fallback for iOS web or desktop
+        href = `https://apps.apple.com/app/id${IOS_APP_ID}`;
+        text = 'Download on the App Store';
       } else {
         href = FALLBACK_WEB;
         text = 'Visit our website';
