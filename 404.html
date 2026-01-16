@@ -187,7 +187,7 @@
     }
 
     function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
-      const base = `https://play.google.com/store/apps/details?id=${packageName}`;
+      const base = `market://details?id=${packageName}`;
 
       const pairs = [];
       if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
