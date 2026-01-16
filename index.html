@@ -187,19 +187,25 @@
     }
 
     function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
-      const base = `market://details?id=${packageName}`;
-
       const pairs = [];
       if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
       if (utmParams.utm_medium) pairs.push(`utm_medium=${utmParams.utm_medium}`);
       if (utmParams.utm_campaign) pairs.push(`utm_campaign=${utmParams.utm_campaign}`);
 
-      if (pairs.length === 0) return base;
+      // If no params, just return a standard market link (though explicit intent is still safer)
+      if (pairs.length === 0) {
+        return `intent://details?id=${packageName}#Intent;scheme=market;package=com.android.vending;end;`;
+      }
 
+      // 1. Join the UTM params
       const referrerPayload = pairs.join("&");
-      const encoded = encodeURIComponent(referrerPayload);
 
-      return `${base}&referrer=${encoded}`;
+      // 2. Encode the payload so it stays inside the 'referrer' query param
+      const encodedReferrer = encodeURIComponent(referrerPayload);
+
+      // 3. Construct the Intent
+      // We use scheme=market, but we target package=com.android.vending directly.
+      return `intent://details?id=${packageName}&referrer=${encodedReferrer}#Intent;scheme=market;package=com.android.vending;end;`;
     }
 
     async function init() {
