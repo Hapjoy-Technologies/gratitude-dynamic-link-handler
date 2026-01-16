@@ -1,18 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <meta property="og:title" content="Gratitude | A tool to help you improve your long-term well-being."/>
-  <meta property="og:image" content="https://gratitude-app-content.s3.us-east-1.amazonaws.com/gratitude/pastel-pink-logo-1024.png"/>
-  <meta property="og:description" content="Write journal entries for your gratitude journal, construct self-affirmations, receive daily quotes, and build a vision board that consists of images and goals."/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta property="og:title" content="Gratitude | A tool to help you improve your long-term well-being." />
+  <meta property="og:image"
+    content="https://gratitude-app-content.s3.us-east-1.amazonaws.com/gratitude/pastel-pink-logo-1024.png" />
+  <meta property="og:description"
+    content="Write journal entries for your gratitude journal, construct self-affirmations, receive daily quotes, and build a vision board that consists of images and goals." />
   <title>Opening Gratitude…</title>
   <style>
-    body { font-family:sans-serif; text-align:center; padding:2rem; color:#333; background:#f9f9f9; }
-    .message { margin-top:2rem; font-size:1.1rem; }
-    a { color:#0070f3; text-decoration:none; }
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 2rem;
+      color: #333;
+      background: #f9f9f9;
+    }
+
+    .message {
+      margin-top: 2rem;
+      font-size: 1.1rem;
+    }
+
+    a {
+      color: #0070f3;
+      text-decoration: none;
+    }
   </style>
 </head>
+
 <body>
   <h1>Opening Gratitude…</h1>
   <div id="status" class="message">Initializing...</div>
@@ -24,28 +42,64 @@
     const API_REDIRECT =
       'https://avhedfdhma.execute-api.us-east-1.amazonaws.com/prod/redirectToLongURL';
     const ANDROID_PACKAGE = "com.northstar.gratitude";
-    const IOS_APP_ID      = "1372575227";
-    const FALLBACK_WEB    = "https://www.gratefulness.me/";
+    const IOS_APP_ID = "1372575227";
+    const FALLBACK_WEB = "https://www.gratefulness.me/";
+    const BASE_PATH = '/gratitude-dynamic-link-handler/';
     // ─────────────────────────────────────────────────────────────────────
+
+    function extractUtmParams(url) {
+      try {
+        const u = new URL(url);
+        const p = u.searchParams;
+
+        const utm_source = p.get("utm_source");
+        const utm_medium = p.get("utm_medium");
+        const utm_campaign = p.get("utm_campaign");
+
+        const out = {};
+        if (utm_source) out.utm_source = utm_source;
+        if (utm_medium) out.utm_medium = utm_medium;
+        if (utm_campaign) out.utm_campaign = utm_campaign;
+
+        return out;
+      } catch {
+        return {};
+      }
+    }
+
+    function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
+      const base = `https://play.google.com/store/apps/details?id=${packageName}`;
+
+      const pairs = [];
+      if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
+      if (utmParams.utm_medium) pairs.push(`utm_medium=${utmParams.utm_medium}`);
+      if (utmParams.utm_campaign) pairs.push(`utm_campaign=${utmParams.utm_campaign}`);
+
+      if (pairs.length === 0) return base;
+
+      const referrerPayload = pairs.join("&");
+      const encoded = encodeURIComponent(referrerPayload);
+
+      return `${base}&referrer=${encoded}`;
+    }
 
     async function init() {
       const status = document.getElementById('status');
       const rawPath = window.location.pathname;
-      // Adjust this to match your GitHub repo name
-      const BASE_PATH = '/gratitude-dynamic-link-handler/';
 
       let code = rawPath;
       if (rawPath.startsWith(BASE_PATH)) {
         code = rawPath.slice(BASE_PATH.length);
       }
 
-      // Remove any leading or trailing slashes
       code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
-        status.textContent = 'Invalid link.';
+        status.textContent = 'Invalid.';
         return;
       }
-      status.textContent = 'Resolving link...';
+      status.textContent = 'Resolving link.';
+
+      let finalUrl = null;
 
       try {
         const resp = await fetch(API_REDIRECT, {
@@ -53,20 +107,21 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
         });
+
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           throw new Error(err.message || `HTTP ${resp.status}`);
         }
-        // fetch follows redirects by default
+
         const data = await resp.json();
-        const finalUrl = data.longUrl;
+        finalUrl = data.longUrl;
         status.textContent = 'Opening app...';
 
         const ua = navigator.userAgent;
         const isAndroid = /Android/i.test(ua);
-        const isIOS     = /iPhone|iPad|iPod/i.test(ua);
-        const start     = Date.now();
-        const DELAY     = 1500;
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const start = Date.now();
+        const DELAY = 1500;
 
         if (isAndroid) {
           window.location =
@@ -75,18 +130,18 @@
         } else if (isIOS) {
           window.location = finalUrl;
         } else {
-          window.location = finalUrl;
+          const utmParams = extractUtmParams(finalUrl);
+          window.location = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
           return;
         }
 
         setTimeout(() => {
           if (document.visibilityState === 'visible' && Date.now() - start >= DELAY) {
             if (isAndroid) {
-              window.location =
-                `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+              const utmParams = extractUtmParams(finalUrl);
+              window.location = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
             } else if (isIOS) {
-              window.location =
-                `https://apps.apple.com/app/id${IOS_APP_ID}`;
+              window.location = `https://apps.apple.com/app/id${IOS_APP_ID}`;
             }
           }
         }, DELAY);
@@ -94,30 +149,35 @@
       } catch (err) {
         console.error('Redirect error:', err);
         status.textContent = `Error: ${err.message}`;
-        showManual();
+        showManual(finalUrl);
       }
     }
 
-    function showManual() {
+    function showManual(finalUrl) {
       const manual = document.getElementById('manual');
       const container = document.getElementById('manual-link-container');
       const ua = navigator.userAgent;
       let href, text;
+
       if (/Android/i.test(ua)) {
-        href = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+        const utmParams = extractUtmParams(finalUrl || "");
+        href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
         text = 'Get it on Google Play';
       } else if (/iPhone|iPad|iPod/i.test(ua)) {
         href = FALLBACK_WEB;
-        text = 'Open in App';
-      } else {
-        href = FALLBACK_WEB;
         text = 'Visit our website';
+      } else {
+        const utmParams = extractUtmParams(finalUrl || "");
+        href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
+        text = 'Get it on Google Play';
       }
-      container.innerHTML = `<a href="${href}" target="_blank">${text}</a>`;
+
+      container.innerHTML = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
       manual.style.display = 'block';
     }
 
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
+
 </html>
