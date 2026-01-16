@@ -94,10 +94,10 @@
 
       code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
-        status.textContent = 'Invalid.';
+        status.textContent = 'Invalid link.';
         return;
       }
-      status.textContent = 'Resolving link.';
+      status.textContent = 'Resolving link...';
 
       let finalUrl = null;
 
@@ -130,8 +130,7 @@
         } else if (isIOS) {
           window.location = finalUrl;
         } else {
-          const utmParams = extractUtmParams(finalUrl);
-          window.location = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
+          window.location = finalUrl;
           return;
         }
 
@@ -167,9 +166,8 @@
         href = FALLBACK_WEB;
         text = 'Visit our website';
       } else {
-        const utmParams = extractUtmParams(finalUrl || "");
-        href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
-        text = 'Get it on Google Play';
+        href = FALLBACK_WEB;
+        text = 'Visit our website';
       }
 
       container.innerHTML = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
