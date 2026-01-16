@@ -3,40 +3,159 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta property="og:title" content="Gratitude | A tool to help you improve your long-term well-being." />
   <meta property="og:image"
     content="https://gratitude-app-content.s3.us-east-1.amazonaws.com/gratitude/pastel-pink-logo-1024.png" />
   <meta property="og:description"
     content="Write journal entries for your gratitude journal, construct self-affirmations, receive daily quotes, and build a vision board that consists of images and goals." />
   <title>Opening Gratitude…</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
+    :root {
+      --primary-color: #F89C9C;
+      --text-color: #2D3748;
+      --text-secondary: #718096;
+      --bg-gradient: linear-gradient(135deg, #FFF5F5 0%, #ecfdf5 100%);
+      --card-bg: rgba(255, 255, 255, 0.8);
+      --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: sans-serif;
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-color);
+      overflow: hidden;
+    }
+
+    .container {
+      background: var(--card-bg);
+      backdrop-filter: blur(10px);
+      padding: 3rem 2rem;
+      border-radius: 24px;
+      box-shadow: var(--shadow);
       text-align: center;
-      padding: 2rem;
-      color: #333;
-      background: #f9f9f9;
+      max-width: 90%;
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-bottom: 0.5rem;
+      object-fit: cover;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-color);
     }
 
     .message {
-      margin-top: 2rem;
-      font-size: 1.1rem;
+      font-size: 1rem;
+      color: var(--text-secondary);
+      min-height: 1.5rem;
     }
 
-    a {
-      color: #0070f3;
+    /* Spinner */
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(248, 156, 156, 0.3);
+      border-radius: 50%;
+      border-top-color: var(--primary-color);
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    /* Manual Link Button */
+    .btn {
+      display: inline-block;
+      background-color: var(--primary-color);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
       text-decoration: none;
+      font-weight: 500;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(248, 156, 156, 0.4);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px -1px rgba(248, 156, 156, 0.5);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    #manual {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>Opening Gratitude…</h1>
-  <div id="status" class="message">Initializing...</div>
-  <div id="manual" class="message" style="display:none;">
-    If nothing happens, <span id="manual-link-container"></span>.
+  <div class="container">
+    <img src="https://gratitude-app-content.s3.us-east-1.amazonaws.com/blog/icon_app.png" alt="Gratitude Logo"
+      class="logo">
+    <h1>Opening Gratitude</h1>
+    <div id="loading-spinner" class="spinner"></div>
+    <div id="status" class="message">Initializing...</div>
+
+    <div id="manual" style="display:none;">
+      <p class="message" style="margin-bottom: 0.5rem;">If the app doesn't open automatically:</p>
+      <div id="manual-link-container"></div>
+    </div>
   </div>
+
   <script>
     // ─── CONFIG ─────────────────────────────────────────────────────────
     const API_REDIRECT =
@@ -85,6 +204,7 @@
 
     async function init() {
       const status = document.getElementById('status');
+      const spinner = document.getElementById('loading-spinner');
       const rawPath = window.location.pathname;
 
       let code = rawPath;
@@ -95,6 +215,7 @@
       code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
         status.textContent = 'Invalid link.';
+        spinner.style.display = 'none';
         return;
       }
       status.textContent = 'Resolving link...';
@@ -147,7 +268,8 @@
 
       } catch (err) {
         console.error('Redirect error:', err);
-        status.textContent = `Error: ${err.message}`;
+        status.textContent = 'Something went wrong';
+        spinner.style.display = 'none';
         showManual(finalUrl);
       }
     }
@@ -155,6 +277,10 @@
     function showManual(finalUrl) {
       const manual = document.getElementById('manual');
       const container = document.getElementById('manual-link-container');
+      const spinner = document.getElementById('loading-spinner');
+
+      if (spinner) spinner.style.display = 'none';
+
       const ua = navigator.userAgent;
       let href, text;
 
@@ -164,14 +290,14 @@
         text = 'Get it on Google Play';
       } else if (/iPhone|iPad|iPod/i.test(ua)) {
         href = FALLBACK_WEB;
-        text = 'Visit our website';
+        text = 'Visit our website'; // Fallback for iOS web or desktop
       } else {
         href = FALLBACK_WEB;
         text = 'Visit our website';
       }
 
-      container.innerHTML = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-      manual.style.display = 'block';
+      container.innerHTML = `<a href="${href}" class="btn" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      manual.style.display = 'flex';
     }
 
     window.addEventListener('DOMContentLoaded', init);
