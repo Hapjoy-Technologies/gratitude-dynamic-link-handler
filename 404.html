@@ -230,19 +230,25 @@
       let finalUrl = null;
 
       try {
-        const resp = await fetch(API_REDIRECT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code })
-        });
+        // The Pages Function inlines the destination, so the resolve round trip
+        // only happens if this page was served without it.
+        finalUrl = (window.__GRATITUDE_LINK__ || {}).longUrl || null;
 
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err.message || `HTTP ${resp.status}`);
+        if (!finalUrl) {
+          const resp = await fetch(API_REDIRECT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.message || `HTTP ${resp.status}`);
+          }
+
+          const data = await resp.json();
+          finalUrl = data.longUrl;
         }
-
-        const data = await resp.json();
-        finalUrl = data.longUrl;
         status.textContent = 'Opening app...';
 
         const ua = navigator.userAgent;
