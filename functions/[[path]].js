@@ -15,7 +15,7 @@ const DEFAULTS = {
   description:
     "Write journal entries for your gratitude journal, construct self-affirmations, receive daily quotes, and build a vision board that consists of images and goals.",
   image:
-    "https://gratitude-app-content.s3.us-east-1.amazonaws.com/gratitude/pastel-pink-logo-1024.png",
+    "https://static.gratefulness.me/gratitude-app-content/metadata/og-default.jpg",
 };
 
 const escapeAttr = (value) =>
