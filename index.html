@@ -117,6 +117,23 @@
       transform: translateY(0);
     }
 
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--text-color);
+      box-shadow: none;
+      border: 1px solid rgba(45, 55, 72, 0.2);
+    }
+
+    .btn-secondary:hover {
+      box-shadow: none;
+    }
+
+    .subtle-link {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-top: 0.25rem;
+    }
+
     #manual {
       display: flex;
       flex-direction: column;
@@ -149,16 +166,14 @@
   <div class="container">
     <img src="https://gratitude-app-content.s3.us-east-1.amazonaws.com/blog/icon_app.png" alt="Gratitude Logo"
       class="logo">
-    <h1>Opening Gratitude</h1>
+    <h1 id="heading">Opening Gratitude</h1>
     <div id="loading-spinner" class="spinner"></div>
     <div id="status" class="message">Initializing...</div>
 
     <div id="manual" style="display:none;">
-      <p class="message" style="margin-bottom: 0.5rem;">If the app doesn't open automatically:</p>
-      <div id="manual-link-container"></div>
+      <div id="manual-link-container" style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;"></div>
     </div>
   </div>
-
   <script>
     // ─── CONFIG ─────────────────────────────────────────────────────────
     const API_REDIRECT =
@@ -167,61 +182,77 @@
     const IOS_APP_ID = "1372575227";
     const FALLBACK_WEB = "https://www.gratefulness.me/";
     const BASE_PATH = '/gratitude-dynamic-link-handler/';
+    // Where a shared link lands on the web, by the app screen it points to.
+    const WEB_PAGES = {
+      VisionBoard: "https://www.gratefulness.me/visionboard/",
+      Affirmation: "https://www.gratefulness.me/affirmations/",
+      AffirmationSlides: "https://www.gratefulness.me/affirmations/",
+    };
     // ─────────────────────────────────────────────────────────────────────
-
     function extractUtmParams(url) {
       try {
         const u = new URL(url);
         const p = u.searchParams;
-
         const utm_source = p.get("utm_source");
         const utm_medium = p.get("utm_medium");
         const utm_campaign = p.get("utm_campaign");
-
         const out = {};
         if (utm_source) out.utm_source = utm_source;
         if (utm_medium) out.utm_medium = utm_medium;
         if (utm_campaign) out.utm_campaign = utm_campaign;
-
         return out;
       } catch {
         return {};
       }
     }
-
+    function screenOf(url) {
+      try {
+        return new URL(url).searchParams.get("screen");
+      } catch {
+        return null;
+      }
+    }
+    // The web page for this link, keeping its UTM tags so analytics still
+    // credits the share.
+    function webUrlFor(finalUrl) {
+      const page = new URL(WEB_PAGES[screenOf(finalUrl)] || FALLBACK_WEB);
+      const utm = extractUtmParams(finalUrl);
+      Object.keys(utm).forEach((key) => page.searchParams.set(key, utm[key]));
+      return page.toString();
+    }
     function buildPlayStoreUrlWithReferrer(packageName, utmParams) {
       const base = `https://play.google.com/store/apps/details?id=${packageName}`;
-
       const pairs = [];
       if (utmParams.utm_source) pairs.push(`utm_source=${utmParams.utm_source}`);
       if (utmParams.utm_medium) pairs.push(`utm_medium=${utmParams.utm_medium}`);
       if (utmParams.utm_campaign) pairs.push(`utm_campaign=${utmParams.utm_campaign}`);
-
       if (pairs.length === 0) return base;
-
       const referrerPayload = pairs.join("&");
       const encoded = encodeURIComponent(referrerPayload);
-
       return `${base}&referrer=${encoded}`;
     }
-
     function buildAndroidIntentUrl(finalUrl, playFallbackUrl) {
       // intent://<host+path+query>#Intent;scheme=https;package=<pkg>;S.browser_fallback_url=<encoded>;end
       const stripped = (finalUrl || "").replace(/^https?:\/\//i, "");
       const encodedFallback = encodeURIComponent(playFallbackUrl);
       return `intent://${stripped}#Intent;scheme=https;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodedFallback};end`;
     }
-
+    function platform() {
+      const ua = navigator.userAgent;
+      if (/Android/i.test(ua)) return "android";
+      // iPadOS Safari reports itself as a Mac; touch support gives it away.
+      if (/iPhone|iPad|iPod/i.test(ua) ||
+        (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+      return "desktop";
+    }
     async function init() {
       const status = document.getElementById('status');
       const spinner = document.getElementById('loading-spinner');
       const rawPath = window.location.pathname;
-
       let code = rawPath;
       if (rawPath.startsWith(BASE_PATH)) {
         code = rawPath.slice(BASE_PATH.length);
       }
-
       code = code.replace(/^\/+|\/+$/g, '');
       if (!code) {
         status.textContent = 'Invalid link.';
@@ -229,58 +260,44 @@
         return;
       }
       status.textContent = 'Resolving link...';
-
       let finalUrl = null;
-
       try {
         // The Pages Function inlines the destination, so the resolve round trip
         // only happens if this page was served without it.
         finalUrl = (window.__GRATITUDE_LINK__ || {}).longUrl || null;
-
         if (!finalUrl) {
           const resp = await fetch(API_REDIRECT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
           });
-
           if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.message || `HTTP ${resp.status}`);
           }
-
           const data = await resp.json();
           finalUrl = data.longUrl;
         }
-        status.textContent = 'Opening app...';
-
-        const ua = navigator.userAgent;
-        const isAndroid = /Android/i.test(ua);
-        const isIOS = /iPhone|iPad|iPod/i.test(ua);
-
-        if (isAndroid) {
+        const device = platform();
+        if (device === "android") {
+          status.textContent = 'Opening app...';
           const utmParams = extractUtmParams(finalUrl);
           const playUrl = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
-
           // ✅ Use browser_fallback_url so Android handles the fallback in one flow
           window.location = buildAndroidIntentUrl(finalUrl, playUrl);
-
           // Optional: reveal a manual button quickly in case intent is blocked
           setTimeout(() => showManual(finalUrl), 1200);
-
-        } else if (isIOS) {
-          // iOS: try opening the universal link
-          window.location = finalUrl;
-
-          // Optional: show manual fallback after a moment
-          setTimeout(() => showManual(finalUrl), 1200);
-
+        } else if (device === "ios") {
+          // With the app installed, iOS opens it before this page loads (the
+          // association file is served by the Pages Function). Reaching this
+          // page usually means no app, or an in-app browser that skips
+          // universal links. A scripted redirect can't open the app either,
+          // so let the person choose with a tap.
+          showManual(finalUrl);
         } else {
-          // Desktop / other
-          window.location = finalUrl;
-          return;
+          // Desktop: the web version of what was shared.
+          window.location = webUrlFor(finalUrl);
         }
-
       } catch (err) {
         console.error('Redirect error:', err);
         status.textContent = 'Something went wrong';
@@ -288,33 +305,46 @@
         showManual(finalUrl);
       }
     }
-
+    function addLink(container, href, text, className) {
+      const a = document.createElement('a');
+      a.href = href;
+      a.textContent = text;
+      a.className = className;
+      container.appendChild(a);
+    }
     function showManual(finalUrl) {
       const manual = document.getElementById('manual');
       const container = document.getElementById('manual-link-container');
       const spinner = document.getElementById('loading-spinner');
-
+      const status = document.getElementById('status');
       if (spinner) spinner.style.display = 'none';
-
-      const ua = navigator.userAgent;
-      let href, text;
-
-      if (/Android/i.test(ua)) {
+      container.textContent = '';
+      const device = platform();
+      if (device === "android") {
+        status.textContent = "If the app doesn't open automatically:";
         const utmParams = extractUtmParams(finalUrl || "");
-        href = buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams);
-        text = 'Get it on Google Play';
-      } else if (/iPhone|iPad|iPod/i.test(ua)) {
-        href = `https://apps.apple.com/app/id${IOS_APP_ID}`;
-        text = 'Download on the App Store';
+        addLink(container, buildPlayStoreUrlWithReferrer(ANDROID_PACKAGE, utmParams),
+          'Get it on Google Play', 'btn');
+      } else if (device === "ios") {
+        document.getElementById('heading').textContent = 'Gratitude';
+        status.textContent = 'Gratitude journal, affirmations and vision boards in one app.';
+        addLink(container, `https://apps.apple.com/app/id${IOS_APP_ID}`,
+          'Download on the App Store', 'btn');
+        if (finalUrl) {
+          // A tap on a link to another domain does trigger universal links.
+          addLink(container, finalUrl, 'Already have it? Open in the app',
+            'btn btn-secondary');
+          if (screenOf(finalUrl) === "VisionBoard") {
+            addLink(container, webUrlFor(finalUrl),
+              'Or make a vision board on the web', 'subtle-link');
+          }
+        }
       } else {
-        href = FALLBACK_WEB;
-        text = 'Visit our website';
+        addLink(container, finalUrl ? webUrlFor(finalUrl) : FALLBACK_WEB,
+          'Visit our website', 'btn');
       }
-
-      container.innerHTML = `<a href="${href}" class="btn" target="_blank" rel="noopener noreferrer">${text}</a>`;
       manual.style.display = 'flex';
     }
-
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
