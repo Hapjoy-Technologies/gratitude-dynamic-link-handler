@@ -58,9 +58,43 @@ function buildHead(entry, pageUrl) {
   <meta name="twitter:image" content="${escapeAttr(image)}" />`;
 }
 
+// Lets iOS open the app straight from a short link. The app has claimed
+// applinks:links.gratefulness.me since Aug 2025 and resolves the code itself
+// (InitialView.handleUrl), but this file was missing, so iOS never matched.
+// Short codes only: files (anything with a dot, including /.well-known/*) are
+// excluded, and the root page doesn't match "/?*" (one or more characters).
+// Don't add a "/*/*" exclude: Apple's "*" matches empty, so it also blocks
+// /VisionBoard (verified with swcutil, 2026-11-12).
+const APPLE_APP_SITE_ASSOCIATION = {
+  applinks: {
+    details: [
+      {
+        appIDs: ["2CHSM8X6VD.com.northstar.gratitude"],
+        components: [
+          { "/": "/*.*", exclude: true },
+          { "/": "/?*", comment: "Short links such as /VisionBoard" },
+        ],
+      },
+    ],
+  },
+};
+
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
+
+  if (
+    url.pathname === "/.well-known/apple-app-site-association" ||
+    url.pathname === "/apple-app-site-association"
+  ) {
+    return new Response(JSON.stringify(APPLE_APP_SITE_ASSOCIATION), {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=3600",
+      },
+    });
+  }
+
   const code = url.pathname.replace(/^\/+|\/+$/g, "");
 
   // Root and real files (anything with an extension) are served as-is.
